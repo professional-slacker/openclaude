@@ -6,6 +6,8 @@ import {
   EnvCredentialStore,
   MemoryCredentialStore,
   createDefaultCredentialStore,
+  getDefaultCredentialStore,
+  resetDefaultCredentialStore,
   type Credential,
   type CredentialStore,
   type ProviderConfig,
@@ -110,6 +112,14 @@ describe('EnvCredentialStore', () => {
   test('get returns undefined when env var is not set', () => {
     const store = new EnvCredentialStore({})
     expect(store.get('openai')).toBeUndefined()
+  })
+
+  test('get resolves model from OPENAI_MODEL env', () => {
+    const store = new EnvCredentialStore({
+      OPENAI_API_KEY: 'sk-test',
+      OPENAI_MODEL: 'gpt-4o-custom',
+    })
+    expect(store.get('openai')!.model).toBe('gpt-4o-custom')
   })
 
   test('get returns credential when OPENAI_API_KEY is set', () => {
@@ -410,5 +420,25 @@ describe('createDefaultCredentialStore', () => {
     const store = createDefaultCredentialStore({ OPENAI_API_KEY: 'sk-from-env' }, undefined)
     store.set('openai', makeCredential({ apiKey: 'memory-override' }))
     expect(store.get('openai')!.apiKey).toBe('memory-override')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Singleton
+// ---------------------------------------------------------------------------
+
+describe('getDefaultCredentialStore', () => {
+  test('returns same instance on repeated calls', () => {
+    const a = getDefaultCredentialStore()
+    const b = getDefaultCredentialStore()
+    expect(a).toBe(b)
+  })
+
+  test('reset creates a fresh instance', () => {
+    const a = getDefaultCredentialStore()
+    a.set('test-provider', makeCredential({ apiKey: 'k1' }))
+    resetDefaultCredentialStore()
+    const b = getDefaultCredentialStore()
+    expect(b.get('test-provider')).toBeUndefined()
   })
 })

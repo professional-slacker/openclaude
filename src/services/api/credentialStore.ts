@@ -25,6 +25,7 @@ export interface Credential {
   authHeader?: string
   authScheme?: string
   authHeaderValue?: string
+  model?: string
   apiFormat?: ProviderTransport
   customHeaders?: Record<string, string>
 }
@@ -127,7 +128,7 @@ export class EnvCredentialStore implements CredentialStore {
     return {
       apiKey,
       ...(baseUrl ? { baseUrl } : {}),
-      ...(model ? { apiFormat: undefined } : {}),
+      ...(model ? { model } : {}),
     }
   }
 
@@ -497,6 +498,11 @@ export function getDefaultCredentialStore(): CredentialStore {
     _defaultCredentialStore = createDefaultCredentialStore()
   }
   return _defaultCredentialStore
+}
+
+/** Reset the singleton (for test isolation). */
+export function resetDefaultCredentialStore(): void {
+  _defaultCredentialStore = undefined
 }
 
 /**
