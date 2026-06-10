@@ -341,12 +341,27 @@ export async function canonicalizePath(dir: string): Promise<string> {
 }
 
 /**
+ * Lazily-loaded reference to findCanonicalGitRoot. Dynamic import is cached
+ * at module scope so repeated calls don't re-import on every invocation.
+ */
+let _findCanonicalGitRoot: ((startPath: string) => string | null) | undefined
+async function _getFindCanonicalGitRoot() {
+  if (!_findCanonicalGitRoot) {
+    _findCanonicalGitRoot = (await import('./git.js')).findCanonicalGitRoot
+  }
+  return _findCanonicalGitRoot
+}
+
+/**
  * Returns a stable project identity that survives directory renames.
  * For git repos, uses the canonical git root (resolved through worktrees).
  * For non-git directories, falls back to canonicalized cwd path.
+ *
+ * findCanonicalGitRoot() already returns NFC-normalized paths (git.ts:48),
+ * so no additional normalization is needed on the git root result.
  */
 export async function getProjectId(dir: string): Promise<string> {
-  const { findCanonicalGitRoot } = await import('./git.js')
+  const findCanonicalGitRoot = await _getFindCanonicalGitRoot()
   const gitRoot = findCanonicalGitRoot(dir)
   if (gitRoot) {
     return gitRoot.normalize('NFC')
