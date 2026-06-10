@@ -84,6 +84,7 @@ import { sanitizePath } from './path.js'
 import {
   extractJsonStringField,
   extractLastJsonStringField,
+  getProjectId,
   LITE_READ_BUF_SIZE,
   readHeadAndTail,
   readTranscriptForLoad,
@@ -439,9 +440,13 @@ export function isCustomTitleEnabled(): boolean {
 // string; homedir/env/regex are all session-invariant so the result is
 // stable for a given input. Worktree switches just change the key — no
 // cache clear needed.
-export const getProjectDir = memoize((projectDir: string): string => {
-  return join(getProjectsDir(), sanitizePath(projectDir))
-})
+//
+// Accepts optional projectId for stable git-root-based project identity.
+// The resolver includes both args in the cache key so projectId-qualified
+// lookups don't collide with plain cwd-based ones.
+export const getProjectDir = memoize((projectDir: string, projectId?: string): string => {
+  return join(getProjectsDir(), sanitizePath(projectId ?? projectDir))
+}, (projectDir: string, projectId?: string) => projectId ? `${projectDir}\0${projectId}` : projectDir)
 
 let project: Project | null = null
 let cleanupRegistered = false
@@ -1638,10 +1643,11 @@ export async function hydrateRemoteSession(
       (await sessionIngress.getSessionLogs(sessionId, ingressUrl)) || []
 
     // Ensure the project directory and session file exist
-    const projectDir = getProjectDir(getOriginalCwd())
+    const cwd = getOriginalCwd()
+    const projectDir = getProjectDir(cwd, await getProjectId(cwd))
     await mkdir(projectDir, { recursive: true, mode: 0o700 })
 
-    const sessionFile = getTranscriptPathForSession(sessionId)
+    const sessionFile = join(projectDir, `${sessionId}.jsonl`)
 
     // Replace local logs with remote logs. writeFile truncates, so no
     // unlink is needed; an empty remoteLogs array produces an empty file.
@@ -1692,11 +1698,12 @@ export async function hydrateFromCCRv2InternalEvents(
       return false
     }
 
-    const projectDir = getProjectDir(getOriginalCwd())
+    const cwd = getOriginalCwd()
+    const projectDir = getProjectDir(cwd, await getProjectId(cwd))
     await mkdir(projectDir, { recursive: true, mode: 0o700 })
 
     // Write foreground transcript
-    const sessionFile = getTranscriptPathForSession(sessionId)
+    const sessionFile = join(projectDir, `${sessionId}.jsonl`)
     const fgContent = events.map(e => jsonStringify(e.payload) + '\n').join('')
     await writeFile(sessionFile, fgContent, { encoding: 'utf8', mode: 0o600 })
 
@@ -2851,8 +2858,9 @@ async function trackSessionBranchingAnalytics(
 }
 
 export async function fetchLogs(limit?: number): Promise<LogOption[]> {
-  const projectDir = getProjectDir(getOriginalCwd())
-  const logs = await getSessionFilesLite(projectDir, limit, getOriginalCwd())
+  const cwd = getOriginalCwd()
+  const projectDir = getProjectDir(cwd, await getProjectId(cwd))
+  const logs = await getSessionFilesLite(projectDir, limit, cwd)
 
   await trackSessionBranchingAnalytics(logs)
 
@@ -4144,10 +4152,10 @@ async function loadSessionFile(sessionId: UUID): Promise<{
   contextCollapseCommits: ContextCollapseCommitEntry[]
   contextCollapseSnapshot: ContextCollapseSnapshotEntry | undefined
 }> {
-  const sessionFile = join(
-    getSessionProjectDir() ?? getProjectDir(getOriginalCwd()),
-    `${sessionId}.jsonl`,
-  )
+  const projectDir =
+    getSessionProjectDir() ??
+    getProjectDir(getOriginalCwd(), await getProjectId(getOriginalCwd()))
+  const sessionFile = join(projectDir, `${sessionId}.jsonl`)
   return loadTranscriptFile(sessionFile)
 }
 
@@ -4436,7 +4444,7 @@ async function getStatOnlyLogsForWorktrees(
 
   if (worktreePaths.length <= 1) {
     const cwd = getOriginalCwd()
-    const projectDir = getProjectDir(cwd)
+    const projectDir = getProjectDir(cwd, await getProjectId(cwd))
     return getSessionFilesLite(projectDir, undefined, cwd)
   }
 
@@ -4644,7 +4652,8 @@ export async function loadAllSubagentTranscriptsFromDisk(): Promise<{
   [agentId: string]: Message[]
 }> {
   const subagentsDir = join(
-    getSessionProjectDir() ?? getProjectDir(getOriginalCwd()),
+    getSessionProjectDir() ??
+      getProjectDir(getOriginalCwd(), await getProjectId(getOriginalCwd())),
     getSessionId(),
     'subagents',
   )

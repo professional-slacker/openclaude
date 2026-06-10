@@ -19,6 +19,8 @@ import {
   extractJsonStringField,
   extractLastJsonStringField,
   findProjectDir,
+  getProjectDir,
+  getProjectId,
   MAX_SANITIZED_LENGTH,
   readSessionLite,
   sanitizePath,
@@ -394,6 +396,25 @@ async function gatherProjectCandidates(
         )
         break
       }
+    }
+  }
+
+  // Also try the canonical git root identity (survives directory renames).
+  // When CWD-based sanitized dirs don't match, the git-root-based dir can
+  // rescue history from moved/renamed directories.
+  const projectId = await getProjectId(dir)
+  if (projectId !== canonicalDir) {
+    const gitBasedProjectDir = getProjectDir(dir, projectId)
+    const gitBasedCandidates = await listCandidates(
+      gitBasedProjectDir,
+      doStat,
+      canonicalDir,
+    )
+    const seenSessions = new Set(all.map(c => c.sessionId))
+    for (const candidate of gitBasedCandidates) {
+      if (seenSessions.has(candidate.sessionId)) continue
+      seenSessions.add(candidate.sessionId)
+      all.push(candidate)
     }
   }
 

@@ -322,8 +322,8 @@ export function sanitizePath(name: string): string {
 // Project directory discovery (shared by listSessions & getSessionMessages)
 // ---------------------------------------------------------------------------
 
-export function getProjectDir(projectDir: string): string {
-  return join(getProjectsDir(), sanitizePath(projectDir))
+export function getProjectDir(projectPath: string, projectId?: string): string {
+  return join(getProjectsDir(), sanitizePath(projectId ?? projectPath))
 }
 
 /**
@@ -338,6 +338,20 @@ export async function canonicalizePath(dir: string): Promise<string> {
   } catch {
     return dir.normalize('NFC')
   }
+}
+
+/**
+ * Returns a stable project identity that survives directory renames.
+ * For git repos, uses the canonical git root (resolved through worktrees).
+ * For non-git directories, falls back to canonicalized cwd path.
+ */
+export async function getProjectId(dir: string): Promise<string> {
+  const { findCanonicalGitRoot } = await import('./git.js')
+  const gitRoot = findCanonicalGitRoot(dir)
+  if (gitRoot) {
+    return gitRoot.normalize('NFC')
+  }
+  return canonicalizePath(dir)
 }
 
 /**
@@ -358,21 +372,36 @@ export async function findProjectDir(
     // Exact match failed — for short paths this means no sessions exist.
     // For long paths, try prefix matching to handle hash mismatches.
     const sanitized = sanitizePath(projectPath)
-    if (sanitized.length <= MAX_SANITIZED_LENGTH) {
-      return undefined
+    if (sanitized.length > MAX_SANITIZED_LENGTH) {
+      const prefix = sanitized.slice(0, MAX_SANITIZED_LENGTH)
+      const projectsDir = getProjectsDir()
+      try {
+        const dirents = await readdir(projectsDir, { withFileTypes: true })
+        const match = dirents.find(
+          d => d.isDirectory() && d.name.startsWith(prefix + '-'),
+        )
+        if (match) return join(projectsDir, match.name)
+      } catch {
+        // readdir failed — fall through to git-root fallback
+      }
     }
-    const prefix = sanitized.slice(0, MAX_SANITIZED_LENGTH)
-    const projectsDir = getProjectsDir()
+    // If neither CWD-based nor long-path prefix match found, don't return
+    // undefined yet — fall through to git-root fallback below.
+  }
+
+  // Fallback: try canonical git root identity (survives directory renames).
+  // Only applicable when git root differs from canonical CWD path.
+  const projectId = await getProjectId(projectPath)
+  if (projectId !== await canonicalizePath(projectPath)) {
+    const gitBased = getProjectDir(projectPath, projectId)
     try {
-      const dirents = await readdir(projectsDir, { withFileTypes: true })
-      const match = dirents.find(
-        d => d.isDirectory() && d.name.startsWith(prefix + '-'),
-      )
-      return match ? join(projectsDir, match.name) : undefined
+      await readdir(gitBased)
+      return gitBased
     } catch {
-      return undefined
+      // Not found via git root either
     }
   }
+  return undefined
 }
 
 /**
