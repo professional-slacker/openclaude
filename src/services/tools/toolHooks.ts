@@ -3,6 +3,7 @@ import {
   logEvent,
 } from 'src/services/analytics/index.js'
 import { sanitizeToolNameForAnalytics } from 'src/services/analytics/metadata.js'
+import { getCwd } from '../../utils/cwd.js'
 import type z from 'zod/v4'
 import type { CanUseToolFn } from '../../hooks/useCanUseTool.js'
 import type { AnyObject, Tool, ToolUseContext } from '../../Tool.js'
@@ -225,7 +226,7 @@ export async function* runPostToolUseHooks<Input extends AnyObject, Output>(
         }
       } else {
         try {
-          const cwd = toolUseContext.options?.cwd ?? process.cwd()
+          const cwd = toolUseContext.options?.cwd ?? getCwd()
           const autoFixResult = await runAutoFixCheck({
             lint: autoFixConfig.lint,
             test: autoFixConfig.test,

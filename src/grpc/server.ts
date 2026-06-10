@@ -7,6 +7,7 @@ import { getTools } from '../tools.js'
 import { getDefaultAppState } from '../state/AppStateStore.js'
 import { AppState } from '../state/AppState.js'
 import { FileStateCache, READ_FILE_STATE_CACHE_SIZE } from '../utils/fileStateCache.js'
+import { getCwd } from '../utils/cwd.js'
 import { getBuiltInAgents } from '../tools/AgentTool/builtInAgents.js'
 
 const PROTO_PATH = path.resolve(import.meta.dirname, '../proto/openclaude.proto')
@@ -87,7 +88,7 @@ export class GrpcServer {
           const toolNameById = new Map<string, string>()
 
           engine = new QueryEngine({
-            cwd: req.working_directory || process.cwd(),
+            cwd: req.working_directory || getCwd(),
             tools: getTools(appState.toolPermissionContext), // Gets all available tools
             commands: [], // Slash commands
             mcpClients: [],
