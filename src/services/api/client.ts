@@ -46,6 +46,7 @@ import {
   shouldUseFirstPartyAnthropicAuth,
   type ProviderOverride,
 } from './authRouting.js'
+import { resolveProviderApiKey } from './credentialStore.js'
 
 const importRuntimeModule = new Function(
   'specifier',
@@ -209,7 +210,8 @@ function applyXiaomiMimoEnvOnlyDefaults(): void {
       ? modelOverride
       : undefined) ??
     getRouteDefaultModel('xiaomi-mimo')
-  process.env.OPENAI_API_KEY = process.env.MIMO_API_KEY
+  process.env.OPENAI_API_KEY =
+    process.env.MIMO_API_KEY ?? resolveProviderApiKey('xiaomi-mimo') ?? ''
   delete process.env.OPENAI_API_FORMAT
   delete process.env.OPENAI_AUTH_HEADER
   delete process.env.OPENAI_AUTH_SCHEME
@@ -229,7 +231,8 @@ function applyXaiEnvOnlyDefaults(): void {
       ? modelOverride
       : undefined) ??
     getRouteDefaultModel('xai')
-  process.env.OPENAI_API_KEY = process.env.XAI_API_KEY
+  process.env.OPENAI_API_KEY =
+    process.env.XAI_API_KEY ?? resolveProviderApiKey('xai') ?? ''
   delete process.env.OPENAI_API_FORMAT
   delete process.env.OPENAI_AUTH_HEADER
   delete process.env.OPENAI_AUTH_SCHEME

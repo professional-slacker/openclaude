@@ -42,6 +42,7 @@ import { hydrateGeminiAccessTokenFromSecureStorage } from '../../utils/geminiCre
 import { hydrateGithubModelsTokenFromSecureStorage } from '../../utils/githubModelsCredentials.js'
 import { resolveXaiAccessToken } from '../../utils/xaiCredentials.js'
 import { resolveOpenAIShimRuntimeContext } from '../../integrations/runtimeMetadata.js'
+import { resolveProviderApiKey } from './credentialStore.js'
 import {
   isXaiBaseUrl,
   resolveRouteCredentialValue,
@@ -452,7 +453,9 @@ function hydrateOpenAIShimCompatibilityEnv(
   // credential aliases because downstream auth/header paths read OPENAI_*.
   if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_GEMINI)) {
     const geminiApiKey =
-      processEnv.GEMINI_API_KEY ?? processEnv.GOOGLE_API_KEY
+      processEnv.GEMINI_API_KEY ??
+      processEnv.GOOGLE_API_KEY ??
+      resolveProviderApiKey('gemini')
     if (geminiApiKey && !processEnv.OPENAI_API_KEY) {
       processEnv.OPENAI_API_KEY = geminiApiKey
     }
@@ -460,15 +463,20 @@ function hydrateOpenAIShimCompatibilityEnv(
   }
 
   if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_MISTRAL)) {
-    if (processEnv.MISTRAL_API_KEY && !processEnv.OPENAI_API_KEY) {
-      processEnv.OPENAI_API_KEY = processEnv.MISTRAL_API_KEY
+    const mistralApiKey =
+      processEnv.MISTRAL_API_KEY ?? resolveProviderApiKey('mistral')
+    if (mistralApiKey && !processEnv.OPENAI_API_KEY) {
+      processEnv.OPENAI_API_KEY = mistralApiKey
     }
     return
   }
 
   if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_GITHUB)) {
     processEnv.OPENAI_API_KEY ??=
-      processEnv.GITHUB_TOKEN ?? processEnv.GH_TOKEN ?? ''
+      processEnv.GITHUB_TOKEN ??
+      processEnv.GH_TOKEN ??
+      resolveProviderApiKey('github') ??
+      ''
     return
   }
 
