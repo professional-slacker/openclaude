@@ -497,24 +497,11 @@ export function setCwd(path: string, relativeTo?: string): void {
   setCwdState(physicalPath)
   if (process.env.NODE_ENV !== 'test') {
     try {
-      process.chdir(physicalPath)
-    } catch (chdirError) {
-      try {
-        process.emitWarning(
-          `Failed to update OS working directory to ${physicalPath}: ${(chdirError as Error).message}`,
-        )
-      } catch {
-        /* best-effort */
-      }
-    }
-  }
-  if (process.env.NODE_ENV !== 'test') {
-    try {
       logEvent('tengu_shell_set_cwd', {
         success: true,
       })
     } catch (_error) {
-      // Ignore logging errors to prevent test failures
+      // Ignore logging errors
     }
   }
 }
